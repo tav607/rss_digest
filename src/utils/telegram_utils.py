@@ -27,10 +27,32 @@ def _convert_markdown_bold_to_telegram(text: str) -> tuple[str, list[str]]:
     return result, bold_segments
 
 
+def _convert_markdown_links_to_telegram(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """
+    Extract Markdown links [text](url) and replace with placeholders.
+    Returns text with placeholders and list of (display_text, url) tuples.
+    """
+    links = []
+
+    def replace_link(match):
+        display_text = match.group(1)
+        url = match.group(2)
+        links.append((display_text, url))
+        return f"\x00LINK{len(links)-1}\x00"
+
+    # Match [text](url) - handle one level of nested parentheses in URLs (e.g. Wikipedia)
+    # Pattern: [^()]* matches non-parens, (?:\([^()]*\)[^()]*)* matches balanced (...)
+    result = re.sub(r'\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)', replace_link, text)
+    return result, links
+
+
 def _escape_markdown_v2_content(text: str) -> str:
-    """Escapes MarkdownV2 special characters in a given string, preserving **bold** as Telegram bold."""
-    # First, extract and protect bold segments
-    text_with_placeholders, bold_segments = _convert_markdown_bold_to_telegram(text)
+    """Escapes MarkdownV2 special characters in a given string, preserving **bold** and [text](url) links."""
+    # First, extract and protect links
+    text_with_link_placeholders, links = _convert_markdown_links_to_telegram(text)
+
+    # Then, extract and protect bold segments
+    text_with_placeholders, bold_segments = _convert_markdown_bold_to_telegram(text_with_link_placeholders)
 
     # Characters to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
     escape_chars_pattern = r'([_*\[\]()~`>#+=|{}.!-])'
@@ -43,6 +65,14 @@ def _escape_markdown_v2_content(text: str) -> str:
         escaped_content = re.sub(escape_chars_pattern, r'\\\1', content)
         # Replace placeholder with Telegram bold format: *text*
         escaped_text = escaped_text.replace(f"\x00BOLD{i}\x00", f"*{escaped_content}*")
+
+    # Restore links with proper MarkdownV2 format
+    for i, (display_text, url) in enumerate(links):
+        # Escape display text
+        escaped_display = re.sub(escape_chars_pattern, r'\\\1', display_text)
+        # Escape special chars in URL (only ) and \)
+        escaped_url = url.replace('\\', '\\\\').replace(')', '\\)')
+        escaped_text = escaped_text.replace(f"\x00LINK{i}\x00", f"[{escaped_display}]({escaped_url})")
 
     return escaped_text
 

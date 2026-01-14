@@ -161,10 +161,11 @@ class AIProcessor:
             local_client = OpenAI(base_url=self.base_url, api_key=self.api_key)
             title = e.get('title', 'N/A')
             source = e.get('feed_name', 'N/A')
+            link = e.get('link', '')
             content = e.get('content', '') or ''
             user_prompt = (
                 "请基于以下单篇文章内容提炼要点，遵循系统提示的格式要求：\n\n"
-                f"标题: {title}\n来源: {source}\n正文:\n{content}\n"
+                f"标题: {title}\n来源: {source}\n原文链接: {link}\n正文:\n{content}\n"
             )
             max_attempts = 2
             for attempt in range(1, max_attempts + 1):
@@ -185,7 +186,7 @@ class AIProcessor:
                             api_logger.debug(
                                 f"Stage1 success on retry {attempt} for title='{title[:60]}'"
                             )
-                        return i, title, source, summary
+                        return i, title, source, link, summary
                     else:
                         raise RuntimeError("empty summary")
                 except Exception as ex:
@@ -200,7 +201,7 @@ class AIProcessor:
                         api_logger.error(
                             f"Stage1 giving up for '{title[:60]}' after {max_attempts} attempts"
                         )
-                        return i, title, source, ""
+                        return i, title, source, link, ""
 
         api_logger.debug(
             f"Stage1 parallel summarization start: entries={len(entries)}, max_workers={STAGE1_MAX_WORKERS}"
@@ -209,8 +210,8 @@ class AIProcessor:
         with ThreadPoolExecutor(max_workers=STAGE1_MAX_WORKERS) as executor:
             futures = [executor.submit(worker, idx, entry) for idx, entry in enumerate(entries, start=1)]
             for fut in as_completed(futures):
-                i, title, source, per_article = fut.result()
-                header = f"[来源:{source}] [标题:{title}]"
+                i, title, source, link, per_article = fut.result()
+                header = f"[来源:{source}] [链接:{link}] [标题:{title}]"
                 block = (
                     f"--- ARTICLE {i} START ---\n{header}\n要点:\n{per_article}\n--- ARTICLE {i} END ---"
                 )
