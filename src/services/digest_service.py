@@ -32,7 +32,7 @@ PROCESSED_IDS_FILE = PROJECT_ROOT / "logs" / "processed_entry_ids.json"
 # Define the path for storing digest history (for deduplication)
 DIGEST_HISTORY_FILE = PROJECT_ROOT / "logs" / "digest_history.json"
 # Number of recent digests to keep for deduplication
-DIGEST_HISTORY_LIMIT = 5
+DIGEST_HISTORY_LIMIT = 10
 
 
 def _load_digest_history() -> list[str]:
